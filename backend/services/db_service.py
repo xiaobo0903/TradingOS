@@ -38,11 +38,25 @@ class DatabaseService:
             logger.error(f"数据库连接失败: {e}")
             raise
 
+    def _convert_params(self, params: dict) -> dict:
+        """将 numpy 类型转换为 Python 原生类型"""
+        if not params:
+            return params
+        result = {}
+        for k, v in params.items():
+            if hasattr(v, 'item'):  # numpy type
+                result[k] = v.item()
+            elif isinstance(v, (list, tuple)):
+                result[k] = [x.item() if hasattr(x, 'item') else x for x in v]
+            else:
+                result[k] = v
+        return result
+
     def execute(self, sql: str, params: dict = None) -> None:
         """执行 SQL 语句"""
         with self.engine.connect() as conn:
             if params:
-                conn.execute(text(sql), params)
+                conn.execute(text(sql), self._convert_params(params))
             else:
                 conn.execute(text(sql))
 
