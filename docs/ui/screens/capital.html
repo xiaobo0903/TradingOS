@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Capital - TradingOS</title>
+  <style>
+    :root {
+      --bg: #0B1220;
+      --surface: #151F32;
+      --surface-2: #1D2B45;
+      --fg: #FFFFFF;
+      --muted: #8892A6;
+      --border: #2A3A55;
+      --accent: #1a73e8;
+      --accent-ai: #722ED1;
+      --rising: #F5222D;
+      --falling: #52C41A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; height: 100vh; overflow: hidden; }
+    .app { display: grid; grid-template-rows: 56px 1fr 40px; grid-template-columns: 240px 1fr; height: 100vh; }
+
+    .header { grid-column: 1 / -1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; }
+    .logo { font-size: 18px; font-weight: 700; }
+    .logo span { color: var(--accent-ai); }
+    .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+    .market-pill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--falling); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .ai-btn { background: linear-gradient(135deg, var(--accent-ai), #5a1db5); border: none; color: #fff; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; font-weight: 600; }
+
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 12px 0; overflow-y: auto; }
+    .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 12px 20px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; color: var(--muted); cursor: pointer; font-size: 14px; border-right: 2px solid transparent; transition: all 0.15s; }
+    .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+    .nav-item.active { background: rgba(26,115,232,0.1); color: var(--accent); border-right-color: var(--accent); }
+    .nav-item .icon { font-size: 16px; width: 22px; text-align: center; }
+    .nav-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+    .main { padding: 14px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; gap: 14px; }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .card-title .icon { font-size: 16px; }
+    .ai-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(114,46,209,0.18); color: var(--accent-ai); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
+
+    /* Capital flow overview */
+    .capital-overview { grid-column: 1 / -1; }
+    .cap-hero { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .cap-hero-item { background: var(--bg); border-radius: 8px; padding: 16px; text-align: center; }
+    .cap-hero-item .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+    .cap-hero-item .val { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .cap-hero-item .val.in { color: var(--falling); }
+    .cap-hero-item .val.out { color: var(--rising); }
+    .cap-hero-item .bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+    .cap-hero-item .bar .fill { height: 100%; border-radius: 3px; }
+    .cap-hero-item .bar .fill.in { background: var(--falling); }
+    .cap-hero-item .bar .fill.out { background: var(--rising); }
+
+    /* Detailed breakdown */
+    .breakdown-table { width: 100%; border-collapse: collapse; }
+    .breakdown-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .breakdown-table td { padding: 11px 10px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .breakdown-table tr:last-child td { border-bottom: none; }
+    .breakdown-table .name { font-weight: 600; }
+    .breakdown-table .amount { font-variant-numeric: tabular-nums; text-align: right; font-weight: 700; }
+    .breakdown-table .amount.in { color: var(--falling); }
+    .breakdown-table .amount.out { color: var(--rising); }
+    .breakdown-table .pct { color: var(--muted); font-size: 12px; }
+    .breakdown-table .bar-cell { width: 120px; }
+    .breakdown-table .bar-wrap { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .breakdown-table .bar-wrap .bar { height: 100%; border-radius: 4px; }
+    .breakdown-table .bar-wrap .bar.in { background: var(--falling); }
+    .breakdown-table .bar-wrap .bar.out { background: var(--rising); }
+
+    /* AI 主力行为分析 */
+    .ai-behavior { grid-column: 1 / -1; }
+    .behavior-grid { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
+    .behavior-left { display: flex; flex-direction: column; gap: 12px; }
+    .behavior-state { background: var(--bg); border-radius: 8px; padding: 16px; border-left: 4px solid var(--falling); }
+    .behavior-state .state-label { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+    .behavior-state .state-val { font-size: 20px; font-weight: 800; color: var(--falling); margin-bottom: 8px; }
+    .behavior-state .state-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .behavior-evidence { display: flex; flex-direction: column; gap: 8px; }
+    .evidence-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 6px; font-size: 13px; }
+    .evidence-item .bullet { color: var(--falling); font-weight: 700; }
+    .behavior-right { background: var(--bg); border-radius: 8px; padding: 16px; }
+    .behavior-right .title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--accent-ai); }
+    .phase-list { display: flex; flex-direction: column; gap: 10px; }
+    .phase-item { display: flex; align-items: center; gap: 12px; }
+    .phase-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .phase-dot.done { background: var(--falling); }
+    .phase-dot.active { background: var(--accent-ai); }
+    .phase-dot.todo { background: var(--border); }
+    .phase-item .label { font-size: 13px; color: var(--fg); }
+    .phase-item .label.done { color: var(--muted); text-decoration: line-through; }
+    .phase-item .label.active { font-weight: 600; }
+
+    /* Dragon list */
+    .dragon-card { }
+    .dragon-table { width: 100%; border-collapse: collapse; }
+    .dragon-table th { text-align: left; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px; border-bottom: 1px solid var(--border); }
+    .dragon-table td { padding: 10px 8px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .dragon-table tr:last-child td { border-bottom: none; }
+    .dragon-table .stock { font-weight: 700; }
+    .dragon-table .code { font-size: 11px; color: var(--muted); font-family: monospace; }
+    .dragon-table .broker { font-size: 12px; color: var(--muted); }
+    .dragon-table .buy-amt { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--falling); text-align: right; }
+    .dragon-table .sell-amt { font-variant-numeric: tabular-nums; color: var(--rising); text-align: right; }
+    .dragon-table .net { font-weight: 700; text-align: right; }
+    .dragon-table .net.in { color: var(--falling); }
+    .dragon-table .net.out { color: var(--rising); }
+    .dragon-table .reason { font-size: 11px; color: var(--muted); }
+    .dragon-table .tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+    .dragon-table .tag.you { background: rgba(245,34,45,0.15); color: var(--rising); }
+    .dragon-table .tag.jig { background: rgba(26,115,232,0.15); color: var(--accent); }
+
+    /* North flow */
+    .north-card { }
+    .north-hero { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .north-arrow { font-size: 36px; color: var(--falling); }
+    .north-amount { font-size: 32px; font-weight: 800; color: var(--falling); font-variant-numeric: tabular-nums; }
+    .north-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .north-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .north-item { background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; }
+    .north-item .lbl { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .north-item .val { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .north-item .val.in { color: var(--falling); }
+    .north-item .val.out { color: var(--rising); }
+
+    /* Status bar */
+    .statusbar { grid-column: 1 / -1; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 24px; font-size: 11px; color: var(--muted); }
+    .statusbar .item { display: flex; align-items: center; gap: 6px; }
+    .statusbar .dot-sm { width: 6px; height: 6px; border-radius: 50%; }
+    .statusbar .dot-sm.ok { background: var(--falling); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">Trading<span>OS</span><span class="logo-sub">V1.0</span></div>
+      <div class="header-right">
+        <div class="market-pill"><span class="dot"></span><span>A股 · 交易中</span><span>09:50:07</span></div>
+        <button class="ai-btn">🤖 AI 大脑</button>
+        <div class="avatar">伍</div>
+      </div>
+    </header>
+
+    <nav class="sidebar">
+      <div class="nav-label">导航</div>
+      <div class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></div>
+      <div class="nav-item"><span class="icon">📊</span><span>Market 市场</span></div>
+      <div class="nav-item"><span class="icon">⭐</span><span>WatchList 自选</span></div>
+      <div class="nav-item"><span class="icon">📈</span><span>Stock 个股分析</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">📉</span><span>Indicators 指标</span></div>
+      <div class="nav-item active"><span class="icon">💰</span><span>Capital 资金</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">🤖</span><span>AI Intelligence</span></div>
+      <div class="nav-item"><span class="icon">🗄</span><span>Data Center</span></div>
+      <div class="nav-item"><span class="icon">📚</span><span>Knowledge Base</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⚙</span><span>Settings</span></div>
+    </nav>
+
+    <main class="main">
+      <!-- 资金流向概览 -->
+      <div class="card capital-overview">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">💰</span> 今日资金流向</div>
+          <span style="font-size:12px;color:var(--muted)">实时更新</span>
+        </div>
+        <div class="cap-hero">
+          <div class="cap-hero-item">
+            <div class="lbl">主力净流入</div>
+            <div class="val in">+186 亿</div>
+            <div class="bar"><div class="fill in" style="width:75%"></div></div>
+          </div>
+          <div class="cap-hero-item">
+            <div class="lbl">超大单</div>
+            <div class="val in">+98 亿</div>
+            <div class="bar"><div class="fill in" style="width:60%"></div></div>
+          </div>
+          <div class="cap-hero-item">
+            <div class="lbl">大单</div>
+            <div class="val in">+88 亿</div>
+            <div class="bar"><div class="fill in" style="width:52%"></div></div>
+          </div>
+          <div class="cap-hero-item">
+            <div class="lbl">中单</div>
+            <div class="val out">-62 亿</div>
+            <div class="bar"><div class="fill out" style="width:38%"></div></div>
+          </div>
+          <div class="cap-hero-item">
+            <div class="lbl">散户</div>
+            <div class="val out">-124 亿</div>
+            <div class="bar"><div class="fill out" style="width:65%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 详细分类 -->
+      <div class="card" style="grid-column:1">
+        <div class="card-header"><div class="card-title"><span class="icon">📊</span> 资金分类明细</div></div>
+        <table class="breakdown-table">
+          <thead><tr><th>类型</th><th>净流入</th><th class="bar-cell">占比</th><th>方向</th></tr></thead>
+          <tbody>
+            <tr><td class="name">超大单</td><td class="amount in">+98 亿</td><td class="bar-cell"><div class="bar-wrap"><div class="bar in" style="width:53%"></div></div></td><td>做多</td></tr>
+            <tr><td class="name">大单</td><td class="amount in">+88 亿</td><td class="bar-cell"><div class="bar-wrap"><div class="bar in" style="width:47%"></div></div></td><td>做多</td></tr>
+            <tr><td class="name">中单</td><td class="amount out">-62 亿</td><td class="bar-cell"><div class="bar-wrap"><div class="bar out" style="width:33%"></div></div></td><td>做空</td></tr>
+            <tr><td class="name">散户</td><td class="amount out">-124 亿</td><td class="bar-cell"><div class="bar-wrap"><div class="bar out" style="width:67%"></div></div></td><td>做空</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 北向资金 -->
+      <div class="card north-card">
+        <div class="card-header"><div class="card-title"><span class="icon">🌊</span> 北向资金</div></div>
+        <div class="north-hero">
+          <span class="north-arrow">↗</span>
+          <div>
+            <div class="north-amount">+52.8 亿</div>
+            <div class="north-sub">今日北向资金净买入</div>
+          </div>
+        </div>
+        <div class="north-detail">
+          <div class="north-item"><div class="lbl">沪股通</div><div class="val in">+28.3 亿</div></div>
+          <div class="north-item"><div class="lbl">深股通</div><div class="val in">+24.5 亿</div></div>
+          <div class="north-item"><div class="lbl">近5日</div><div class="val in">+186 亿</div></div>
+          <div class="north-item"><div class="lbl">近20日</div><div class="val in">+682 亿</div></div>
+        </div>
+      </div>
+
+      <!-- AI 主力行为分析 -->
+      <div class="card ai-behavior">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">🤖</span> AI 主力行为分析</div>
+          <span class="ai-badge">吸筹阶段</span>
+        </div>
+        <div class="behavior-grid">
+          <div class="behavior-left">
+            <div class="behavior-state">
+              <div class="state-label">AI 判断</div>
+              <div class="state-val">当前可能：吸筹阶段</div>
+              <div class="state-sub">综合分析超大单、大单持续净流入，而中单和散户净流出的形态，符合主力资金低位吸筹特征。预计后续将有拉升动作。</div>
+            </div>
+            <div class="behavior-evidence">
+              <div class="evidence-item"><span class="bullet">✓</span>低位持续放量，资金温和放大</div>
+              <div class="evidence-item"><span class="bullet">✓</span>换手率稳步提升，市场活跃度增加</div>
+              <div class="evidence-item"><span class="bullet">✓</span>价格稳定在窄幅区间震荡</div>
+              <div class="evidence-item"><span class="bullet">✓</span>北向资金持续净买入</div>
+            </div>
+          </div>
+          <div class="behavior-right">
+            <div class="title">主力操作周期</div>
+            <div class="phase-list">
+              <div class="phase-item"><span class="phase-dot done"></span><span class="label done">低位建仓</span></div>
+              <div class="phase-item"><span class="phase-dot active"></span><span class="label active">吸筹阶段 ◀ 当前</span></div>
+              <div class="phase-item"><span class="phase-dot todo"></span><span class="label">试盘拉升</span></div>
+              <div class="phase-item"><span class="phase-dot todo"></span><span class="label">快速拉升</span></div>
+              <div class="phase-item"><span class="phase-dot todo"></span><span class="label">派发筹码</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 龙虎榜 -->
+      <div class="card dragon-card" style="grid-column:1">
+        <div class="card-header"><div class="card-title"><span class="icon">🐉</span> 龙虎榜</div></div>
+        <table class="dragon-table">
+          <thead><tr><th>股票</th><th>席位性质</th><th>买入金额</th><th>卖出金额</th><th>净买入</th><th>上榜原因</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="stock">科大智能</div><div class="code">300222</div></td>
+              <td><span class="tag you">游资</span></td>
+              <td class="buy-amt">2.8亿</td>
+              <td class="sell-amt">0.5亿</td>
+              <td class="net in">+2.3亿</td>
+              <td class="reason">机器人龙头</td>
+            </tr>
+            <tr>
+              <td><div class="stock">寒武纪</div><div class="code">688256</div></td>
+              <td><span class="tag you">游资</span></td>
+              <td class="buy-amt">2.1亿</td>
+              <td class="sell-amt">0.3亿</td>
+              <td class="net in">+1.8亿</td>
+              <td class="reason">AI算力概念</td>
+            </tr>
+            <tr>
+              <td><div class="stock">宁德时代</div><div class="code">300750</div></td>
+              <td><span class="tag jig">机构</span></td>
+              <td class="buy-amt">1.8亿</td>
+              <td class="sell-amt">0.6亿</td>
+              <td class="net in">+1.2亿</td>
+              <td class="reason">业绩超预期</td>
+            </tr>
+            <tr>
+              <td><div class="stock">中国平安</div><div class="code">601318</div></td>
+              <td><span class="tag jig">机构</span></td>
+              <td class="buy-amt">0.4亿</td>
+              <td class="sell-amt">1.6亿</td>
+              <td class="net out">-1.2亿</td>
+              <td class="reason">保险板块走弱</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <footer class="statusbar">
+      <div class="item"><span class="dot-sm ok"></span><span>数据连接正常</span></div>
+      <div class="item"><span>A股 · 实时行情</span></div>
+      <div class="item"><span>最后更新: 09:50:28</span></div>
+      <div class="item" style="margin-left:auto"><span>TradingOS v1.0</span></div>
+    </footer>
+  </div>
+</body>
+</html>

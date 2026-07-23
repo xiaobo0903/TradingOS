@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>风险分析 - TradingOS</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #21262d;
+      --fg: #f0f6fc;
+      --muted: #8b949e;
+      --border: #30363d;
+      --accent: #1a73e8;
+      --accent-ai: #8957e5;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      grid-template-columns: 220px 1fr;
+      height: 100vh;
+    }
+    .header {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 24px;
+    }
+    .logo { font-size: 18px; font-weight: 700; }
+    .logo span { color: var(--accent-ai); }
+    .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+    .market-status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .ai-btn { background: linear-gradient(135deg, var(--accent-ai), #6e40c9); border: none; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; font-weight: 600; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 0; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: var(--muted); cursor: pointer; transition: all 0.15s; font-size: 14px; }
+    .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+    .nav-item.active { background: rgba(26, 115, 232, 0.1); color: var(--accent); border-right: 2px solid var(--accent); }
+    .nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+    .nav-divider { height: 1px; background: var(--border); margin: 12px 20px; }
+    .main { padding: 20px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+    /* Risk Gauge Cards */
+    .risk-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; text-align: center; }
+    .risk-card .icon { font-size: 32px; margin-bottom: 16px; }
+    .risk-card .title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .risk-card .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .gauge-wrap { position: relative; width: 180px; height: 90px; margin: 0 auto 20px; }
+    .gauge-bg { position: absolute; width: 180px; height: 90px; border-radius: 90px 90px 0 0; background: var(--bg); overflow: hidden; }
+    .gauge-fill { position: absolute; bottom: 0; left: 0; right: 0; height: 90px; border-radius: 90px 90px 0 0; transform-origin: bottom center; transition: transform 0.5s ease; }
+    .gauge-fill.low { background: linear-gradient(to top, var(--success), #2d8a4e); }
+    .gauge-fill.mid { background: linear-gradient(to top, var(--warning), #a67c00); }
+    .gauge-fill.high { background: linear-gradient(to top, var(--danger), #b32017); }
+    .gauge-mask { position: absolute; bottom: 0; left: 15px; right: 15px; height: 75px; background: var(--surface); border-radius: 75px 75px 0 0; }
+    .gauge-value { position: absolute; bottom: 10px; left: 0; right: 0; font-size: 36px; font-weight: 800; }
+    .gauge-value.low { color: var(--success); }
+    .gauge-value.mid { color: var(--warning); }
+    .gauge-value.high { color: var(--danger); }
+    .gauge-label { font-size: 14px; color: var(--muted); }
+    .risk-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-top: 16px; }
+
+    /* Risk List Card */
+    .risk-list-card { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    .risk-list-header { font-size: 16px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    .risk-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .risk-item { background: var(--bg); border-radius: 8px; padding: 16px; border-left: 4px solid; }
+    .risk-item.market { border-left-color: var(--accent); }
+    .risk-item.position { border-left-color: var(--warning); }
+    .risk-item.stock { border-left-color: var(--danger); }
+    .risk-item .type { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .risk-item .desc { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+    .risk-item .detail { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">Trading<span>OS</span><span class="logo-sub">AI Stock Intelligence</span></div>
+      <div class="header-right">
+        <div class="market-status"><span class="status-dot"></span><span>A股</span><span style="color: var(--muted)">● 交易中</span></div>
+        <button class="ai-btn">🤖 AI 大脑</button>
+        <div class="user-avatar">伍</div>
+      </div>
+    </header>
+
+    <nav class="sidebar">
+      <div class="nav-item"><span class="icon">🏠</span><span>首页</span></div>
+      <div class="nav-item"><span class="icon">📊</span><span>市场分析</span></div>
+      <div class="nav-item"><span class="icon">📈</span><span>个股分析</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⭐</span><span>自选股票</span></div>
+      <div class="nav-item"><span class="icon">💼</span><span>我的持仓</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item active"><span class="icon">🛡</span><span>风险分析</span></div>
+      <div class="nav-item"><span class="icon">🗄</span><span>数据中心</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⚙</span><span>系统设置</span></div>
+    </nav>
+
+    <main class="main">
+      <!-- Market Risk -->
+      <div class="risk-card">
+        <div class="icon">📊</div>
+        <div class="title">市场风险</div>
+        <div class="subtitle">基于大盘指数波动性</div>
+        <div class="gauge-wrap">
+          <div class="gauge-bg">
+            <div class="gauge-fill low" style="transform: rotate(0.54turn);"></div>
+          </div>
+          <div class="gauge-mask"></div>
+          <div class="gauge-value low">42</div>
+        </div>
+        <div class="gauge-label">风险指数</div>
+        <div class="risk-desc">市场整体风险较低，指数波动性处于正常区间，可适度参与。</div>
+      </div>
+
+      <!-- Position Risk -->
+      <div class="risk-card">
+        <div class="icon">💼</div>
+        <div class="title">仓位风险</div>
+        <div class="subtitle">基于持仓集中度与杠杆</div>
+        <div class="gauge-wrap">
+          <div class="gauge-bg">
+            <div class="gauge-fill mid" style="transform: rotate(0.585turn);"></div>
+          </div>
+          <div class="gauge-mask"></div>
+          <div class="gauge-value mid">58</div>
+        </div>
+        <div class="gauge-label">风险指数</div>
+        <div class="risk-desc">仓位偏重，前两大持仓占比超过79%，建议适当分散。</div>
+      </div>
+
+      <!-- Stock Risk -->
+      <div class="risk-card">
+        <div class="icon">📈</div>
+        <div class="title">个股风险</div>
+        <div class="subtitle">基于持仓个股波动性</div>
+        <div class="gauge-wrap">
+          <div class="gauge-bg">
+            <div class="gauge-fill low" style="transform: rotate(0.27turn);"></div>
+          </div>
+          <div class="gauge-mask"></div>
+          <div class="gauge-value low">28</div>
+        </div>
+        <div class="gauge-label">风险指数</div>
+        <div class="risk-desc">持仓个股基本面稳健，AI评分均在75以上，风险可控。</div>
+      </div>
+
+      <!-- Risk Items List -->
+      <div class="risk-list-card">
+        <div class="risk-list-header">⚠️ 风险预警详情</div>
+        <div class="risk-items">
+          <div class="risk-item market">
+            <div class="type">市场风险</div>
+            <div class="desc">机器人板块短期涨幅过大</div>
+            <div class="detail">建议关注板块轮动机会，适当降低相关持仓</div>
+          </div>
+          <div class="risk-item position">
+            <div class="type">仓位风险</div>
+            <div class="desc">持仓集中度偏高</div>
+            <div class="detail">茅台占比52%，建议适当减持至40%以下</div>
+          </div>
+          <div class="risk-item stock">
+            <div class="type">个股风险</div>
+            <div class="desc">赛力斯出现浮亏</div>
+            <div class="detail">当前-4.13%，建议设置止损位-8%</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

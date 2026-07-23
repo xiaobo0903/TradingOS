@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的持仓 - TradingOS</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #21262d;
+      --fg: #f0f6fc;
+      --muted: #8b949e;
+      --border: #30363d;
+      --accent: #1a73e8;
+      --accent-ai: #8957e5;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      grid-template-columns: 220px 1fr;
+      height: 100vh;
+    }
+    .header {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 24px;
+    }
+    .logo { font-size: 18px; font-weight: 700; }
+    .logo span { color: var(--accent-ai); }
+    .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+    .market-status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .ai-btn { background: linear-gradient(135deg, var(--accent-ai), #6e40c9); border: none; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; font-weight: 600; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 0; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: var(--muted); cursor: pointer; transition: all 0.15s; font-size: 14px; }
+    .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+    .nav-item.active { background: rgba(26, 115, 232, 0.1); color: var(--accent); border-right: 2px solid var(--accent); }
+    .nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+    .nav-divider { height: 1px; background: var(--border); margin: 12px 20px; }
+    .main { padding: 20px; overflow-y: auto; }
+
+    /* Portfolio Summary */
+    .portfolio-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+    .summary-card .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .summary-card .value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .summary-card .value.up { color: var(--success); }
+    .summary-card .value.down { color: var(--danger); }
+    .summary-card .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+    /* Position Table */
+    .position-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .position-title { font-size: 18px; font-weight: 700; }
+    .position-actions { display: flex; gap: 12px; }
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.danger { background: rgba(248, 81, 73, 0.1); border-color: var(--danger); color: var(--danger); }
+
+    .position-table { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .table-head { display: grid; grid-template-columns: 80px 1fr 100px 100px 100px 100px 100px 100px 120px; gap: 12px; padding: 14px 20px; background: var(--surface-2); font-size: 12px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .table-row { display: grid; grid-template-columns: 80px 1fr 100px 100px 100px 100px 100px 100px 120px; gap: 12px; padding: 16px 20px; align-items: center; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    .table-row:last-child { border-bottom: none; }
+    .table-row:hover { background: var(--surface-2); }
+    .table-row .code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
+    .table-row .name { font-weight: 600; }
+    .table-row .price { font-size: 14px; font-variant-numeric: tabular-nums; }
+    .table-row .value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .table-row .value.up { color: var(--success); }
+    .table-row .value.down { color: var(--danger); }
+    .table-row .pct { font-size: 13px; font-variant-numeric: tabular-nums; }
+    .table-row .pct.up { color: var(--success); }
+    .table-row .pct.down { color: var(--danger); }
+    .table-row .suggest { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; display: inline-block; }
+    .table-row .suggest.buy { background: rgba(63, 185, 80, 0.15); color: var(--success); }
+    .table-row .suggest.hold { background: rgba(26, 115, 232, 0.15); color: var(--accent); }
+    .table-row .suggest.sell { background: rgba(248, 81, 73, 0.15); color: var(--danger); }
+    .table-row .suggest.reduce { background: rgba(210, 153, 34, 0.15); color: var(--warning); }
+    .action-btns { display: flex; gap: 8px; }
+    .action-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.15s; }
+    .action-btn:hover { background: var(--surface-2); color: var(--fg); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">Trading<span>OS</span><span class="logo-sub">AI Stock Intelligence</span></div>
+      <div class="header-right">
+        <div class="market-status"><span class="status-dot"></span><span>A股</span><span style="color: var(--muted)">● 交易中</span></div>
+        <button class="ai-btn">🤖 AI 大脑</button>
+        <div class="user-avatar">伍</div>
+      </div>
+    </header>
+
+    <nav class="sidebar">
+      <div class="nav-item"><span class="icon">🏠</span><span>首页</span></div>
+      <div class="nav-item"><span class="icon">📊</span><span>市场分析</span></div>
+      <div class="nav-item"><span class="icon">📈</span><span>个股分析</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⭐</span><span>自选股票</span></div>
+      <div class="nav-item active"><span class="icon">💼</span><span>我的持仓</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">🛡</span><span>风险分析</span></div>
+      <div class="nav-item"><span class="icon">🗄</span><span>数据中心</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⚙</span><span>系统设置</span></div>
+    </nav>
+
+    <main class="main">
+      <div class="portfolio-summary">
+        <div class="summary-card">
+          <div class="label">总资产</div>
+          <div class="value">¥ 1,258,430</div>
+          <div class="sub">市值 ¥ 1,185,600</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">今日收益</div>
+          <div class="value up">+ ¥ 12,580</div>
+          <div class="sub">持仓盈亏</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">持仓收益率</div>
+          <div class="value up">+ 8.24%</div>
+          <div class="sub">跑赢大盘 +5.2%</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">当前仓位</div>
+          <div class="value">72%</div>
+          <div class="sub">建议仓位 70%</div>
+        </div>
+      </div>
+
+      <div class="position-header">
+        <div class="position-title">💼 我的持仓（5只）</div>
+        <div class="position-actions">
+          <button class="btn">+ 加仓</button>
+          <button class="btn">自动调仓</button>
+        </div>
+      </div>
+
+      <div class="position-table">
+        <div class="table-head">
+          <span>股票代码</span>
+          <span>股票名称</span>
+          <span>持仓数量</span>
+          <span>成本价</span>
+          <span>现价</span>
+          <span>盈亏额</span>
+          <span>盈亏率</span>
+          <span>仓位占比</span>
+          <span>操作建议</span>
+        </div>
+        <div class="table-row">
+          <span class="code">600519</span>
+          <span class="name">贵州茅台</span>
+          <span>500</span>
+          <span>1350.00</span>
+          <span class="price">1480.50</span>
+          <span class="value up">+65,250</span>
+          <span class="pct up">+9.67%</span>
+          <span>52.3%</span>
+          <span><span class="suggest hold">持有</span></span>
+        </div>
+        <div class="table-row">
+          <span class="code">300750</span>
+          <span class="name">宁德时代</span>
+          <span>2000</span>
+          <span>165.00</span>
+          <span class="price">182.35</span>
+          <span class="value up">+34,700</span>
+          <span class="pct up">+10.52%</span>
+          <span>26.8%</span>
+          <span><span class="suggest buy">加仓</span></span>
+        </div>
+        <div class="table-row">
+          <span class="code">002230</span>
+          <span class="name">科大讯飞</span>
+          <span>3000</span>
+          <span>46.50</span>
+          <span class="price">48.72</span>
+          <span class="value up">+6,660</span>
+          <span class="pct up">+4.77%</span>
+          <span>10.2%</span>
+          <span><span class="suggest hold">持有</span></span>
+        </div>
+        <div class="table-row">
+          <span class="code">300222</span>
+          <span class="name">科大智能</span>
+          <span>5000</span>
+          <span>11.80</span>
+          <span class="price">12.45</span>
+          <span class="value up">+3,250</span>
+          <span class="pct up">+5.51%</span>
+          <span>8.5%</span>
+          <span><span class="suggest buy">加仓</span></span>
+        </div>
+        <div class="table-row">
+          <span class="code">601127</span>
+          <span class="name">赛力斯</span>
+          <span>1000</span>
+          <span>92.00</span>
+          <span class="price">88.20</span>
+          <span class="value down">-3,800</span>
+          <span class="pct down">-4.13%</span>
+          <span>6.2%</span>
+          <span><span class="suggest reduce">减仓</span></span>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

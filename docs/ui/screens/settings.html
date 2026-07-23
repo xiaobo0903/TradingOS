@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - TradingOS</title>
+  <style>
+    :root {
+      --bg: #0B1220;
+      --surface: #151F32;
+      --surface-2: #1D2B45;
+      --fg: #FFFFFF;
+      --muted: #8892A6;
+      --border: #2A3A55;
+      --accent: #1a73e8;
+      --accent-ai: #722ED1;
+      --rising: #F5222D;
+      --falling: #52C41A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; height: 100vh; overflow: hidden; }
+    .app { display: grid; grid-template-rows: 56px 1fr 40px; grid-template-columns: 240px 1fr; height: 100vh; }
+
+    .header { grid-column: 1 / -1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; }
+    .logo { font-size: 18px; font-weight: 700; }
+    .logo span { color: var(--accent-ai); }
+    .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+    .market-pill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--falling); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .ai-btn { background: linear-gradient(135deg, var(--accent-ai), #5a1db5); border: none; color: #fff; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; font-weight: 600; }
+
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 12px 0; overflow-y: auto; }
+    .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 12px 20px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; color: var(--muted); cursor: pointer; font-size: 14px; border-right: 2px solid transparent; transition: all 0.15s; }
+    .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+    .nav-item.active { background: rgba(26,115,232,0.1); color: var(--accent); border-right-color: var(--accent); }
+    .nav-item .icon { font-size: 16px; width: 22px; text-align: center; }
+    .nav-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+    .main { padding: 14px; overflow-y: auto; display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
+
+    /* Settings nav */
+    .settings-nav { display: flex; flex-direction: column; gap: 4px; }
+    .settings-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+    .settings-nav-item:hover { background: var(--surface); color: var(--fg); }
+    .settings-nav-item.active { background: var(--surface); color: var(--fg); font-weight: 600; }
+    .settings-nav-item .icon { font-size: 16px; }
+
+    /* Settings content */
+    .settings-content { display: flex; flex-direction: column; gap: 14px; }
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+    .section-header { font-size: 14px; font-weight: 700; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+    .section-header .icon { font-size: 16px; }
+
+    /* Source list */
+    .source-list { display: flex; flex-direction: column; gap: 8px; }
+    .source-row { display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg); border-radius: 8px; }
+    .source-row .name { flex: 1; font-weight: 600; font-size: 14px; }
+    .src-status { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 4px; }
+    .src-status.ok { background: rgba(82,196,26,0.15); color: var(--falling); }
+    .src-status.error { background: rgba(245,34,45,0.15); color: var(--rising); }
+    .src-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .src-btn { padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+    .src-btn:hover { background: var(--surface-2); color: var(--fg); }
+    .src-btn.primary { background: rgba(26,115,232,0.15); color: var(--accent); border-color: var(--accent); }
+
+    /* Rows */
+    .srow { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .srow:last-child { border-bottom: none; padding-bottom: 0; }
+    .srow .lbl { font-size: 14px; }
+    .srow .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .toggle { position: relative; width: 40px; height: 22px; background: var(--border); border-radius: 11px; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .toggle.on { background: var(--accent); }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+    .toggle.on::after { transform: translateX(18px); }
+    .sel { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; color: var(--fg); font-size: 13px; min-width: 160px; cursor: pointer; }
+    .sel:focus { outline: none; border-color: var(--accent); }
+
+    /* Log */
+    .log-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+    .log-item { display: flex; gap: 12px; padding: 9px 12px; background: var(--bg); border-radius: 6px; font-size: 12px; align-items: flex-start; }
+    .log-item .time { color: var(--muted); font-family: 'SF Mono', monospace; white-space: nowrap; }
+    .log-item .tag { padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .log-item .tag.info { background: rgba(26,115,232,0.15); color: var(--accent); }
+    .log-item .tag.warn { background: rgba(210,153,34,0.15); color: #d29922; }
+    .log-item .tag.error { background: rgba(245,34,45,0.15); color: var(--rising); }
+    .log-item .msg { flex: 1; color: var(--fg); line-height: 1.4; }
+
+    /* Storage bar */
+    .storage-bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .storage-bar .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+    .storage-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    /* Status bar */
+    .statusbar { grid-column: 1 / -1; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 24px; font-size: 11px; color: var(--muted); }
+    .statusbar .item { display: flex; align-items: center; gap: 6px; }
+    .statusbar .dot-sm { width: 6px; height: 6px; border-radius: 50%; }
+    .statusbar .dot-sm.ok { background: var(--falling); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">Trading<span>OS</span><span class="logo-sub">V1.0</span></div>
+      <div class="header-right">
+        <div class="market-pill"><span class="dot"></span><span>A股 · 交易中</span><span>09:54:11</span></div>
+        <button class="ai-btn">🤖 AI 大脑</button>
+        <div class="avatar">伍</div>
+      </div>
+    </header>
+
+    <nav class="sidebar">
+      <div class="nav-label">导航</div>
+      <div class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></div>
+      <div class="nav-item"><span class="icon">📊</span><span>Market 市场</span></div>
+      <div class="nav-item"><span class="icon">⭐</span><span>WatchList 自选</span></div>
+      <div class="nav-item"><span class="icon">📈</span><span>Stock 个股分析</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">📉</span><span>Indicators 指标</span></div>
+      <div class="nav-item"><span class="icon">💰</span><span>Capital 资金</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">🤖</span><span>AI Intelligence</span></div>
+      <div class="nav-item"><span class="icon">🗄</span><span>Data Center</span></div>
+      <div class="nav-item"><span class="icon">📚</span><span>Knowledge Base</span></div>
+      <div class="nav-divider"></div>
+      <div class="nav-item active"><span class="icon">⚙</span><span>Settings</span></div>
+    </nav>
+
+    <main class="main">
+      <!-- Settings nav -->
+      <nav class="settings-nav">
+        <div class="settings-nav-item active">📡 数据源管理</div>
+        <div class="settings-nav-item">🤖 AI模型配置</div>
+        <div class="settings-nav-item">💾 数据库</div>
+        <div class="settings-nav-item">📋 系统日志</div>
+        <div class="settings-nav-item">👤 用户设置</div>
+      </nav>
+
+      <!-- Settings content -->
+      <div class="settings-content">
+        <!-- Data Sources -->
+        <div class="section">
+          <div class="section-header"><span class="icon">📡</span> 数据源管理</div>
+          <div class="source-list">
+            <div class="source-row">
+              <span class="name">东方财富</span>
+              <span class="src-status ok"><span class="dot"></span>已连接</span>
+              <button class="src-btn">配置</button>
+              <button class="src-btn">禁用</button>
+            </div>
+            <div class="source-row">
+              <span class="name">新浪财经</span>
+              <span class="src-status ok"><span class="dot"></span>已连接</span>
+              <button class="src-btn">配置</button>
+              <button class="src-btn">禁用</button>
+            </div>
+            <div class="source-row">
+              <span class="name">腾讯证券</span>
+              <span class="src-status error"><span class="dot"></span>连接异常</span>
+              <button class="src-btn primary">重连</button>
+              <button class="src-btn">禁用</button>
+            </div>
+            <div class="source-row">
+              <span class="name">同花顺</span>
+              <span class="src-status ok"><span class="dot"></span>已连接</span>
+              <button class="src-btn">配置</button>
+              <button class="src-btn">禁用</button>
+            </div>
+          </div>
+          <button class="src-btn primary" style="margin-top:12px;">+ 添加数据源</button>
+        </div>
+
+        <!-- AI Model -->
+        <div class="section">
+          <div class="section-header"><span class="icon">🤖</span> AI模型配置</div>
+          <div class="srow">
+            <div><div class="lbl">主模型</div><div class="desc">用于股票分析和机会识别</div></div>
+            <select class="sel">
+              <option>Qwen-Max</option>
+              <option>GPT-4 Turbo</option>
+              <option>Claude 3.5</option>
+            </select>
+          </div>
+          <div class="srow">
+            <div><div class="lbl">实时分析</div><div class="desc">启用后实时分析交易信号</div></div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="srow">
+            <div><div class="lbl">风险评估</div><div class="desc">AI自动评估持仓风险等级</div></div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="srow">
+            <div><div class="lbl">RAG知识库</div><div class="desc">启用检索增强生成</div></div>
+            <div class="toggle on"></div>
+          </div>
+        </div>
+
+        <!-- Database -->
+        <div class="section">
+          <div class="section-header"><span class="icon">💾</span> 数据库</div>
+          <div class="srow">
+            <div><div class="lbl">数据保留期</div><div class="desc">K线和行情数据保留时长</div></div>
+            <select class="sel">
+              <option>30天</option>
+              <option selected>90天</option>
+              <option>180天</option>
+              <option>1年</option>
+            </select>
+          </div>
+          <div class="srow">
+            <div><div class="lbl">自动清理</div><div class="desc">每周自动清理过期数据</div></div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="srow">
+            <div><div class="lbl">当前存储</div><div class="desc">已使用 12.8 GB / 50 GB</div></div>
+            <button class="src-btn">清理缓存</button>
+          </div>
+          <div class="storage-bar"><div class="fill" style="width:25.6%"></div></div>
+          <div class="storage-info"><span>已用 12.8 GB</span><span>总计 50 GB</span></div>
+        </div>
+
+        <!-- Log -->
+        <div class="section">
+          <div class="section-header"><span class="icon">📋</span> 系统日志</div>
+          <div class="log-list">
+            <div class="log-item"><span class="time">09:54:08</span><span class="tag info">INFO</span><span class="msg">实时行情任务执行成功，耗时 1.2s</span></div>
+            <div class="log-item"><span class="time">09:53:30</span><span class="tag info">INFO</span><span class="msg">资金流向任务执行成功</span></div>
+            <div class="log-item"><span class="time">09:53:00</span><span class="tag info">INFO</span><span class="msg">分钟K线任务执行成功</span></div>
+            <div class="log-item"><span class="time">09:50:00</span><span class="tag error">ERROR</span><span class="msg">新闻数据采集失败: 连接超时</span></div>
+            <div class="log-item"><span class="time">09:48:12</span><span class="tag warn">WARN</span><span class="msg">腾讯证券数据源响应延迟 35s</span></div>
+            <div class="log-item"><span class="time">09:40:00</span><span class="tag warn">WARN</span><span class="msg">同花顺数据源连接中断，尝试重连...</span></div>
+            <div class="log-item"><span class="time">09:30:00</span><span class="tag info">INFO</span><span class="msg">系统启动完成，数据同步正常</span></div>
+          </div>
+          <button class="src-btn" style="margin-top:12px;">导出日志</button>
+        </div>
+      </div>
+    </main>
+
+    <footer class="statusbar">
+      <div class="item"><span class="dot-sm ok"></span><span>系统运行正常</span></div>
+      <div class="item"><span>TradingOS v1.0</span></div>
+      <div class="item" style="margin-left:auto"><span>最后更新: 09:54:22</span></div>
+    </footer>
+  </div>
+</body>
+</html>
