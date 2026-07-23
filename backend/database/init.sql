@@ -39,6 +39,16 @@ CREATE TABLE base.stock_info (
     float_cap DECIMAL(18,2),               -- 流通市值
     listing_date DATE,                     -- 上市日期
     status VARCHAR(10) DEFAULT 'ACTIVE',   -- 状态
+    -- 实时行情字段
+    price DECIMAL(10,2),                  -- 最新价
+    change DECIMAL(10,2),                  -- 涨跌额
+    change_percent DECIMAL(10,2),          -- 涨跌幅
+    volume BIGINT,                         -- 成交量
+    amount DECIMAL(18,2),                  -- 成交额
+    turnover DECIMAL(10,2),               -- 换手率
+    pe DECIMAL(10,2),                     -- 市盈率
+    pb DECIMAL(10,2),                     -- 市净率
+    volume_ratio DECIMAL(10,2),            -- 量比
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
