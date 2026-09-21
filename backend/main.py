@@ -1,41 +1,78 @@
+"""
+TradingOS FastAPI 应用入口
+"""
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import market, stock, indicator, capital, ai, knowledge
 
+from config import settings
+from models.database import init_db
+from utils.logging import app_logger
+
+from api import data_center
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时
+    app_logger.info("TradingOS 启动中...", category="SYSTEM")
+    init_db()
+    app_logger.info("数据库初始化完成", category="SYSTEM")
+
+    # 启动定时任务调度器
+    from scheduler import start_scheduler
+    start_scheduler()
+
+    yield
+
+    # 关闭时停止调度器
+    from scheduler import stop_scheduler
+    stop_scheduler()
+
+    app_logger.info("TradingOS 关闭", category="SYSTEM")
+
+
+# 创建 FastAPI 应用
 app = FastAPI(
-    title="TradingOS API",
-    description="TradingOS 智能股票分析系统 API",
-    version="1.0.0"
+    title="TradingOS",
+    description="A 股智能分析系统 API",
+    version=settings.VERSION,
+    lifespan=lifespan
 )
 
-# CORS配置
+# 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # 注册路由
-app.include_router(market.router, prefix="/api/market", tags=["市场数据"])
-app.include_router(stock.router, prefix="/api/stock", tags=["股票数据"])
-app.include_router(indicator.router, prefix="/api/indicator", tags=["技术指标"])
-app.include_router(capital.router, prefix="/api/capital", tags=["资金数据"])
-app.include_router(ai.router, prefix="/api/ai", tags=["AI分析"])
-app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"])
+app.include_router(data_center.router)
 
 
 @app.get("/")
-async def root():
-    return {"message": "TradingOS API", "version": "1.0.0"}
+def root():
+    return {
+        "name": "TradingOS",
+        "version": settings.VERSION,
+        "description": "A 股智能分析系统"
+    }
 
 
 @app.get("/health")
-async def health_check():
+def health_check():
     return {"status": "healthy"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG
+    )

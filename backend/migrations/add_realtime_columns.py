@@ -31,6 +31,7 @@ def migrate():
 
         new_columns = [
             ('main_inflow', 'NUMERIC(20, 2)'),
+            ('main_volume', 'NUMERIC(20, 4)'),
             ('weibi', 'NUMERIC(10, 4)'),
             ('buy_price', 'NUMERIC(10, 2)'),
             ('sell_price', 'NUMERIC(10, 2)'),

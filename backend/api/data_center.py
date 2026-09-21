@@ -111,6 +111,7 @@ def get_realtime_list(
                 'pe': float(realtime.pe) if realtime.pe else None,
                 'pb': float(realtime.pb) if realtime.pb else None,
                 'main_inflow': float(realtime.main_inflow) if realtime.main_inflow else 0,
+                'main_volume': float(realtime.main_volume) if realtime.main_volume else 0,
                 'weibi': float(realtime.weibi) if realtime.weibi else 0,
                 'buy_price': float(realtime.buy_price) if realtime.buy_price else 0,
                 'sell_price': float(realtime.sell_price) if realtime.sell_price else 0,
@@ -264,6 +265,7 @@ async def import_stock_data(
 
                 if existing:
                     existing.main_inflow = main_inflow if main_inflow else existing.main_inflow
+                    existing.main_volume = main_volume if main_volume else existing.main_volume
                     existing.turnover_rate = turnover_rate if turnover_rate is not None else existing.turnover_rate
                     existing.weibi = weibi if weibi is not None else existing.weibi
                     existing.buy_price = buy_price if buy_price is not None else existing.buy_price
@@ -273,6 +275,7 @@ async def import_stock_data(
                         stock_id=stock.id,
                         trade_date=parsed_date,
                         main_inflow=main_inflow,
+                        main_volume=main_volume,
                         turnover_rate=turnover_rate,
                         weibi=weibi,
                         buy_price=buy_price,

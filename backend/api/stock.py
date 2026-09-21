@@ -1,356 +1,242 @@
-from fastapi import APIRouter, Path, HTTPException
-from models.schemas import StockInfo, KLineData, IndicatorData, CapitalData, AIAnalysis
-from collectors.stock_collector import StockCollector
-from collectors.kline_collector import KlineCollector
-from collectors.capital_collector import CapitalCollector
-from collectors.indicator_calculator import IndicatorCalculator
-from services.db_service import db_service
-import logging
+"""
+股票相关 API 接口
+"""
+from typing import List, Optional
+from datetime import datetime, date
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-router = APIRouter()
-
-# 初始化采集器
-stock_collector = StockCollector()
-kline_collector = KlineCollector()
-capital_collector = CapitalCollector()
-indicator_calculator = IndicatorCalculator()
+from models.database import get_db
+from models.stock import Stock, StockDaily, StockPrice
+from models.indicator import StockIndicator
 
 
-def get_stock_info_from_db(code: str) -> StockInfo:
-    """从数据库获取股票信息"""
-    stock = db_service.get_stock(code)
-    if stock:
-        return StockInfo(
-            code=stock["symbol"],
-            name=stock["name"],
-            price=stock.get("price", 0) or 0,
-            change=stock.get("change", 0) or 0,
-            change_percent=stock.get("change_percent", 0) or 0,
-            volume=stock.get("volume", 0) or 0,
-            amount=stock.get("amount", 0) or 0,
-            turnover=stock.get("turnover", 0) or 0,
-            volume_ratio=stock.get("volume_ratio", 0) or 0,
-            pe=stock.get("pe", 0) or 0,
-            pb=stock.get("pb", 0) or 0,
-            high_52w=stock.get("high_52w", 0) or 0,
-            low_52w=stock.get("low_52w", 0) or 0,
-        )
-    return None
+router = APIRouter(prefix="/api/stocks", tags=["股票"])
 
 
-def get_stock_info_from_api(code: str) -> StockInfo:
-    """从AKShare获取实时股票信息"""
-    info = stock_collector.get_stock_info(code)
-    if info:
-        return StockInfo(**info)
-    return None
+# Pydantic Schemas
+class StockBase(BaseModel):
+    code: str
+    name: str
+    market: Optional[str] = None
+    industry: Optional[str] = None
 
 
-def get_kline_from_db(code: str, days: int = 60) -> list[KLineData]:
-    """从数据库获取K线数据"""
-    klines = db_service.get_daily_kline(code, days)
-    return [
-        KLineData(
-            date=k["trade_date"].strftime("%m/%d") if hasattr(k["trade_date"], "strftime") else str(k["trade_date"]),
-            open=float(k["open"]),
-            high=float(k["high"]),
-            low=float(k["low"]),
-            close=float(k["close"]),
-            volume=int(k["volume"]),
-            ma5=None,
-            ma10=None,
-            ma20=None,
-        )
-        for k in reversed(klines)
-    ]
+class StockResponse(StockBase):
+    id: int
+    status: str
+
+    class Config:
+        from_attributes = True
 
 
-def get_kline_from_api(code: str, days: int = 60) -> list[KLineData]:
-    """从AKShare获取K线数据"""
-    df = kline_collector.get_daily_kline(code, start_date="20200101")
-    if df.empty:
+class StockDetailResponse(StockBase):
+    id: int
+    status: str
+    current_price: float = 0
+    change_pct: float = 0
+    volume: int = 0
+    amount: float = 0
+    turnover_rate: float = 0
+
+    class Config:
+        from_attributes = True
+
+
+class DailyDataResponse(BaseModel):
+    trade_date: date
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    amount: float
+    turnover_rate: float
+    change_pct: float
+    amplitude: float
+
+    class Config:
+        from_attributes = True
+
+
+class MinuteDataResponse(BaseModel):
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    amount: float
+
+    class Config:
+        from_attributes = True
+
+
+# API Endpoints
+@router.get("/", response_model=List[StockResponse])
+def list_stocks(
+    market: Optional[str] = Query(None, description="市场：SH/SZ"),
+    industry: Optional[str] = Query(None, description="行业"),
+    status: str = Query("active", description="状态"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """获取股票列表"""
+    query = db.query(Stock)
+
+    if market:
+        query = query.filter(Stock.market == market)
+    if industry:
+        query = query.filter(Stock.industry == industry)
+
+    stocks = query.offset((page - 1) * page_size).limit(page_size).all()
+    return stocks
+
+
+@router.get("/{code}", response_model=StockDetailResponse)
+def get_stock(code: str, db: Session = Depends(get_db)):
+    """获取股票详情"""
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if not stock:
+        return {"error": "Stock not found"}
+
+    # 获取最新日线数据
+    latest_daily = db.query(StockDaily).filter(
+        StockDaily.stock_id == stock.id
+    ).order_by(StockDaily.trade_date.desc()).first()
+
+    return {
+        "id": stock.id,
+        "code": stock.code,
+        "name": stock.name,
+        "market": stock.market,
+        "industry": stock.industry,
+        "status": stock.status.value if stock.status else "unknown",
+        "current_price": float(latest_daily.close) if latest_daily else 0,
+        "change_pct": float(latest_daily.change_pct) if latest_daily else 0,
+        "volume": latest_daily.volume if latest_daily else 0,
+        "amount": float(latest_daily.amount) if latest_daily else 0,
+        "turnover_rate": float(latest_daily.turnover_rate) if latest_daily else 0,
+    }
+
+
+@router.get("/{code}/daily", response_model=List[DailyDataResponse])
+def get_daily(
+    code: str,
+    start_date: Optional[str] = Query(None, description="开始日期 YYYYMMDD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYYMMDD"),
+    adjust: str = Query("qfq", description="复权类型 qfq/hfq/None"),
+    db: Session = Depends(get_db)
+):
+    """获取股票日线数据"""
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if not stock:
         return []
 
-    # 计算技术指标
-    df = indicator_calculator.calculate_all(df)
+    query = db.query(StockDaily).filter(StockDaily.stock_id == stock.id)
 
-    records = []
-    for _, row in df.iterrows():
-        records.append(KLineData(
-            date=row.get("日期", ""),
-            open=float(row.get("开盘", 0) or 0),
-            high=float(row.get("最高", 0) or 0),
-            low=float(row.get("最低", 0) or 0),
-            close=float(row.get("收盘", 0) or 0),
-            volume=int(row.get("成交量", 0) or 0),
-            ma5=float(row.get("ma5", 0) or 0) or None,
-            ma10=float(row.get("ma10", 0) or 0) or None,
-            ma20=float(row.get("ma20", 0) or 0) or None,
-        ))
+    if start_date:
+        start = datetime.strptime(start_date, '%Y%m%d').date()
+        query = query.filter(StockDaily.trade_date >= start)
+    if end_date:
+        end = datetime.strptime(end_date, '%Y%m%d').date()
+        query = query.filter(StockDaily.trade_date <= end)
 
-    # 返回最近 days 条
-    return records[-days:] if len(records) > days else records
+    daily_data = query.order_by(StockDaily.trade_date).all()
+    return daily_data
 
 
-def get_indicator_from_db(code: str) -> IndicatorData:
-    """从数据库获取技术指标"""
-    indicator = db_service.get_latest_indicator(code)
-    if indicator:
-        return IndicatorData(
-            ma5=float(indicator.get("ma5", 0) or 0),
-            ma10=float(indicator.get("ma10", 0) or 0),
-            ma20=float(indicator.get("ma20", 0) or 0),
-            ma60=float(indicator.get("ma60", 0) or 0),
-            dif=float(indicator.get("dif", 0) or 0),
-            dea=float(indicator.get("dea", 0) or 0),
-            macd=float(indicator.get("macd", 0) or 0),
-            rsi6=float(indicator.get("rsi6", 0) or 0),
-            rsi12=float(indicator.get("rsi12", 0) or 0),
-            rsi24=float(indicator.get("rsi24", 0) or 0),
-            boll_upper=float(indicator.get("boll_upper", 0) or 0),
-            boll_mid=float(indicator.get("boll_mid", 0) or 0),
-            boll_lower=float(indicator.get("boll_lower", 0) or 0),
-            kdj_k=float(indicator.get("kdj_k", 0) or 0),
-            kdj_d=float(indicator.get("kdj_d", 0) or 0),
-            kdj_j=float(indicator.get("kdj_j", 0) or 0),
-        )
-    return None
+@router.get("/{code}/minute", response_model=List[MinuteDataResponse])
+def get_minute(
+    code: str,
+    period: str = Query("1", description="周期 1/5/15/30/60"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """获取股票分钟数据"""
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if not stock:
+        return []
+
+    minute_data = db.query(StockPrice).filter(
+        StockPrice.stock_id == stock.id
+    ).order_by(StockPrice.timestamp.desc()).limit(limit).all()
+
+    # 反转顺序，按时间正序返回
+    return list(reversed(minute_data))
 
 
-def get_indicator_from_api(code: str) -> IndicatorData:
-    """从AKShare获取并计算技术指标"""
-    df = kline_collector.get_daily_kline(code, start_date="20200101")
-    if df.empty:
-        raise HTTPException(status_code=404, detail="无法获取K线数据")
+@router.get("/{code}/realtime")
+def get_realtime(code: str):
+    """获取实时行情（直接从数据源）"""
+    from providers.akshare_provider import AKShareProvider
+    provider = AKShareProvider()
 
-    df = indicator_calculator.calculate_all(df)
-    latest = indicator_calculator.get_latest_indicators(df)
-    if latest is None:
-        raise HTTPException(status_code=404, detail="数据不足无法计算指标")
-
-    return IndicatorData(**latest)
+    data = provider.get_realtime_price(code)
+    return data[0] if data else {"error": "No data"}
 
 
-def get_capital_from_db(code: str) -> CapitalData:
-    """从数据库获取资金数据"""
-    flows = db_service.get_money_flow(code, days=1)
-    if flows:
-        f = flows[0]
-        return CapitalData(
-            main_inflow=float(f.get("main_inflow", 0) or 0),
-            main_outflow=float(f.get("main_outflow", 0) or 0),
-            super_large_in=float(f.get("super_large_in", 0) or 0),
-            super_large_out=float(f.get("super_large_out", 0) or 0),
-            large_in=float(f.get("large_in", 0) or 0),
-            large_out=float(f.get("large_out", 0) or 0),
-            medium_in=float(f.get("medium_in", 0) or 0),
-            medium_out=float(f.get("medium_out", 0) or 0),
-            small_in=float(f.get("small_in", 0) or 0),
-            small_out=float(f.get("small_out", 0) or 0),
-        )
-    return None
+@router.get("/{code}/indicators")
+def get_indicators(
+    code: str,
+    trade_date: Optional[str] = Query(None, description="交易日期 YYYYMMDD"),
+    db: Session = Depends(get_db)
+):
+    """获取技术指标"""
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if not stock:
+        return {"error": "Stock not found"}
 
+    query = db.query(StockIndicator).filter(StockIndicator.stock_id == stock.id)
 
-def get_capital_from_api(code: str) -> CapitalData:
-    """从AKShare获取资金数据"""
-    df = capital_collector.get_stock_money_flow(code)
-    if df.empty:
-        # 返回默认数据
-        return CapitalData(
-            main_inflow=0,
-            main_outflow=0,
-            super_large_in=0,
-            super_large_out=0,
-            large_in=0,
-            large_out=0,
-            medium_in=0,
-            medium_out=0,
-            small_in=0,
-            small_out=0,
-        )
+    if trade_date:
+        date_obj = datetime.strptime(trade_date, '%Y%m%d').date()
+        query = query.filter(StockIndicator.trade_date == date_obj)
+    else:
+        # 返回最新
+        query = query.order_by(StockIndicator.trade_date.desc())
 
-    # 取最新一条数据
-    row = df.iloc[-1]
-    return CapitalData(
-        main_inflow=float(row.get("主力净流入", 0) or 0),
-        main_outflow=float(row.get("主力净流出", 0) or 0),
-        super_large_in=float(row.get("超大单净流入", 0) or 0),
-        super_large_out=float(row.get("超大单净流出", 0) or 0),
-        large_in=float(row.get("大单净流入", 0) or 0),
-        large_out=float(row.get("大单净流出", 0) or 0),
-        medium_in=float(row.get("中单净流入", 0) or 0),
-        medium_out=float(row.get("中单净流出", 0) or 0),
-        small_in=float(row.get("小单净流入", 0) or 0),
-        small_out=float(row.get("小单净流出", 0) or 0),
-    )
+    indicator = query.first()
+    if not indicator:
+        return {"error": "No indicator data"}
 
-
-# ==================== API 端点 ====================
-
-@router.get("/{code}", response_model=StockInfo)
-async def get_stock(code: str = Path(description="股票代码")):
-    """
-    获取股票基本信息
-
-    优先从数据库读取，数据库没有则从AKShare实时获取
-    """
-    # 先尝试从数据库获取
-    stock = get_stock_info_from_db(code)
-    if stock and stock.price > 0:
-        return stock
-
-    # 数据库没有或价格为空，从API获取
-    stock = get_stock_info_from_api(code)
-    if stock:
-        return stock
-
-    raise HTTPException(status_code=404, detail=f"股票 {code} 不存在")
-
-
-@router.get("/{code}/kline", response_model=list[KLineData])
-async def get_kline(code: str = Path(description="股票代码"), days: int = 60):
-    """
-    获取股票K线数据
-
-    优先从数据库读取，数据库没有则从AKShare实时获取
-    """
-    # 先尝试从数据库获取
-    klines = get_kline_from_db(code, days)
-    if klines:
-        return klines
-
-    # 数据库没有，从API获取
-    try:
-        klines = get_kline_from_api(code, days)
-        if klines:
-            return klines
-    except Exception as e:
-        logger.error(f"获取K线失败: {e}")
-
-    raise HTTPException(status_code=404, detail=f"无法获取股票 {code} 的K线数据")
-
-
-@router.get("/{code}/indicator", response_model=IndicatorData)
-async def get_indicator(code: str = Path(description="股票代码")):
-    """
-    获取技术指标
-
-    优先从数据库读取，数据库没有则从AKShare实时获取并计算
-    """
-    # 先尝试从数据库获取
-    indicator = get_indicator_from_db(code)
-    if indicator:
-        return indicator
-
-    # 数据库没有，从API获取并计算
-    try:
-        indicator = get_indicator_from_api(code)
-        return indicator
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"获取指标失败: {e}")
-        raise HTTPException(status_code=500, detail=f"计算指标失败: {str(e)}")
-
-
-@router.get("/{code}/capital", response_model=CapitalData)
-async def get_capital(code: str = Path(description="股票代码")):
-    """
-    获取资金流向数据
-
-    优先从数据库读取，数据库没有则从AKShare实时获取
-    """
-    # 先尝试从数据库获取
-    capital = get_capital_from_db(code)
-    if capital and (capital.main_inflow != 0 or capital.main_outflow != 0):
-        return capital
-
-    # 数据库没有，从API获取
-    try:
-        capital = get_capital_from_api(code)
-        return capital
-    except Exception as e:
-        logger.error(f"获取资金数据失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取资金数据失败: {str(e)}")
-
-
-@router.get("/{code}/ai", response_model=AIAnalysis)
-async def get_ai_analysis(code: str = Path(description="股票代码")):
-    """
-    获取AI分析结果
-
-    基于技术指标和资金数据生成简单的AI分析
-    """
-    try:
-        # 获取指标和资金数据
-        indicator = get_indicator_from_api(code)
-        capital = get_capital_from_api(code)
-
-        # 简单的AI分析逻辑
-        signals = []
-        risks = []
-        trend = "震荡"
-        confidence = 50
-
-        # MACD分析
-        if indicator.dif > indicator.dea:
-            signals.append("MACD金叉")
-        elif indicator.dif < indicator.dea:
-            signals.append("MACD死叉")
-
-        # RSI分析
-        if indicator.rsi6 > 70:
-            risks.append("RSI超买")
-        elif indicator.rsi6 < 30:
-            signals.append("RSI超卖")
-
-        # BOLL分析
-        if indicator.boll_upper > 0:
-            signals.append("BOLL通道正常")
-
-        # 资金分析
-        if capital.main_inflow > 0:
-            signals.append("主力资金净流入")
-        elif capital.main_inflow < 0:
-            risks.append("主力资金净流出")
-
-        # 判断趋势
-        up_count = sum(1 for s in signals if s not in ["MACD死叉", "RSI超买", "主力资金净流出"])
-        down_count = len(risks)
-
-        if up_count > down_count + 1:
-            trend = "上涨趋势"
-            confidence = min(90, 60 + up_count * 5)
-        elif down_count > up_count + 1:
-            trend = "下跌趋势"
-            confidence = min(90, 60 + down_count * 5)
-
-        suggestion = "建议观望"
-        if trend == "上涨趋势" and "RSI超买" not in risks:
-            suggestion = "建议关注回调买点"
-        elif trend == "下跌趋势":
-            suggestion = "建议谨慎，控制风险"
-
-        return AIAnalysis(
-            trend=trend,
-            confidence=confidence,
-            signals=signals[:5] if signals else ["暂无明显信号"],
-            risks=risks[:5] if risks else ["无明显风险"],
-            suggestion=suggestion,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"AI分析失败: {e}")
-        # 返回默认分析
-        return AIAnalysis(
-            trend="未知",
-            confidence=0,
-            signals=["获取数据失败"],
-            risks=["无法获取数据"],
-            suggestion="请稍后重试",
-        )
+    return {
+        "trade_date": indicator.trade_date,
+        "ma": {
+            "ma5": float(indicator.ma5) if indicator.ma5 else None,
+            "ma10": float(indicator.ma10) if indicator.ma10 else None,
+            "ma20": float(indicator.ma20) if indicator.ma20 else None,
+            "ma30": float(indicator.ma30) if indicator.ma30 else None,
+            "ma60": float(indicator.ma60) if indicator.ma60 else None,
+            "ma120": float(indicator.ma120) if indicator.ma120 else None,
+            "ma250": float(indicator.ma250) if indicator.ma250 else None,
+        },
+        "ema": {
+            "ema12": float(indicator.ema12) if indicator.ema12 else None,
+            "ema26": float(indicator.ema26) if indicator.ema26 else None,
+        },
+        "macd": {
+            "dif": float(indicator.dif) if indicator.dif else None,
+            "dea": float(indicator.dea) if indicator.dea else None,
+            "macd": float(indicator.macd) if indicator.macd else None,
+        },
+        "rsi": {
+            "rsi6": float(indicator.rsi6) if indicator.rsi6 else None,
+            "rsi12": float(indicator.rsi12) if indicator.rsi12 else None,
+            "rsi24": float(indicator.rsi24) if indicator.rsi24 else None,
+        },
+        "boll": {
+            "mb": float(indicator.boll_mb) if indicator.boll_mb else None,
+            "ub": float(indicator.boll_ub) if indicator.boll_ub else None,
+            "lb": float(indicator.boll_lb) if indicator.boll_lb else None,
+            "width": float(indicator.boll_width) if indicator.boll_width else None,
+        },
+        "kdj": {
+            "k": float(indicator.kdj_k) if indicator.kdj_k else None,
+            "d": float(indicator.kdj_d) if indicator.kdj_d else None,
+            "j": float(indicator.kdj_j) if indicator.kdj_j else None,
+        },
+    }

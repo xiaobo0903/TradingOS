@@ -165,8 +165,8 @@ async function handleUpload() {
 // 下载CSV模板
 function downloadTemplate() {
   const template = `序号1,序号2,股票代码,名称,主力净量,主力净流入,换手%,委比%,买一价,卖一价
-1,1,600519,贵州茅台,0,0,0.5,0,0,0
-2,2,000858,五粮液,0,0,0.3,0,0,0`
+1,1,600519,贵州茅台,0.5,1000000,0.5,5.2,1800.00,1801.00
+2,2,000858,五粮液,0.3,800000,0.3,3.8,150.00,150.50`
 
   const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -389,6 +389,12 @@ const totalPages = computed(() => {
             <span :class="getChangeClass(row.main_inflow)">
               {{ formatAmount(row.main_inflow) }}
             </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="主力净量" prop="main_volume" width="90" sortable>
+          <template #default="{ row }">
+            {{ formatNumber(row.main_volume) }}
           </template>
         </el-table-column>
 

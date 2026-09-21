@@ -1,203 +1,123 @@
 """
-资金流数据采集模块
-使用 AKShare 获取资金流向数据
+资金流向数据采集器
 """
-
-import akshare as ak
-import pandas as pd
-from typing import Optional
+from typing import List, Dict, Optional
 from datetime import datetime
-import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from collectors.base import BaseCollector
+from models.database import get_db_context
+from models.stock import Stock
+from models.capital import StockCapital
+from utils.logging import app_logger
 
 
-class CapitalCollector:
-    """资金流数据采集器"""
+class CapitalCollector(BaseCollector):
+    """
+    资金流向数据采集器
 
-    def get_stock_money_flow(self, symbol: str) -> pd.DataFrame:
+    从数据源获取股票资金流向数据
+    """
+
+    name = "capital_collector"
+
+    def collect(self, stock_code: str = None, **kwargs) -> List[Dict]:
         """
-        获取个股资金流数据
+        采集资金流向数据
 
         Args:
-            symbol: 股票代码，如 "600519"
+            stock_code: 股票代码，如果为None则采集所有股票
+
+        Returns:
+            采集并标准化后的资金流向数据列表
         """
-        logger.info(f"正在获取 {symbol} 资金流数据...")
-        try:
-            df = ak.stock_money_flow(symbol=symbol)
-            logger.info(f"获取到 {len(df)} 条资金流数据")
-            return df
-        except Exception as e:
-            logger.error(f"获取资金流失败: {e}")
-            return pd.DataFrame()
+        results = []
 
-    def get_market_money_flow(self) -> pd.DataFrame:
+        if stock_code:
+            # 单只股票
+            data = self.provider.get_capital_flow(stock_code)
+            if data:
+                normalized = self.normalizer(stock_code, data)
+                if normalized:
+                    results.append(normalized)
+                    self._save_capital(stock_code, normalized)
+        else:
+            # 全市场 - 获取所有股票的资金流
+            from collectors.stock_collector import StockCollector
+            stock_collector = StockCollector(self.provider)
+            stocks = stock_collector.collect()
+
+            for stock in stocks:
+                try:
+                    data = self.provider.get_capital_flow(stock['code'])
+                    if data:
+                        normalized = self.normalizer(stock['code'], data)
+                        if normalized:
+                            results.append(normalized)
+                            self._save_capital(stock['code'], normalized)
+                except Exception as e:
+                    app_logger.error(f"采集资金流向失败 {stock['code']}: {e}", category="COLLECTOR")
+                    continue
+
+        self.update_collect_time()
+        return results
+
+    def normalizer(self, stock_code: str, raw_data: Dict) -> Optional[Dict]:
         """
-        获取大盘资金流（行业板块资金流）
+        标准化资金流向数据
+
+        AKShare的资金流数据格式可能有所不同，这里做兼容处理
         """
-        logger.info("正在获取大盘资金流数据...")
-        try:
-            df = ak.stock_money_flow_ind_em()
-            logger.info(f"获取到 {len(df)} 条行业资金流数据")
-            return df
-        except Exception as e:
-            logger.error(f"获取大盘资金流失败: {e}")
-            return pd.DataFrame()
+        if not raw_data:
+            return None
 
-    def get_north_money(self) -> pd.DataFrame:
-        """
-        获取北向资金数据（沪股通+深股通）
-        """
-        logger.info("正在获取北向资金数据...")
-        try:
-            df = ak.stock_em_hsgt_north_net_flow_in(indicator="北向资金")
-            logger.info(f"获取到 {len(df)} 条北向资金数据")
-            return df
-        except Exception as e:
-            logger.error(f"获取北向资金失败: {e}")
-            return pd.DataFrame()
+        # 尝试不同的列名格式
+        return {
+            'stock_code': stock_code,
+            'trade_time': datetime.now(),
+            'main_inflow': raw_data.get('主力净流入', raw_data.get('main_net_inflow', 0)),
+            'main_outflow': raw_data.get('主力净流出', raw_data.get('main_net_outflow', 0)),
+            'super_large_inflow': raw_data.get('超大单净流入', raw_data.get('super_large_net_inflow', 0)),
+            'super_large_outflow': raw_data.get('超大单净流出', raw_data.get('super_large_net_outflow', 0)),
+            'large_inflow': raw_data.get('大单净流入', raw_data.get('large_net_inflow', 0)),
+            'large_outflow': raw_data.get('大单净流出', raw_data.get('large_net_outflow', 0)),
+            'medium_inflow': raw_data.get('中单净流入', raw_data.get('medium_net_inflow', 0)),
+            'medium_outflow': raw_data.get('中单净流出', raw_data.get('medium_net_outflow', 0)),
+            'small_inflow': raw_data.get('小单净流入', raw_data.get('small_net_inflow', 0)),
+            'small_outflow': raw_data.get('小单净流出', raw_data.get('small_net_outflow', 0)),
+            'net_inflow': raw_data.get('净流入', raw_data.get('net_inflow', 0)),
+        }
 
-    def get_north_hold_stock(self) -> pd.DataFrame:
-        """
-        获取北向资金持股明细
-        """
-        logger.info("正在获取北向资金持股明细...")
-        try:
-            df = ak.stock_em_hsgt_north_hold_stock()
-            logger.info(f"获取到 {len(df)} 条持股明细")
-            return df
-        except Exception as e:
-            logger.error(f"获取北向持股失败: {e}")
-            return pd.DataFrame()
+    def validate(self, data: Dict) -> bool:
+        """验证资金流向数据"""
+        if not data.get('stock_code'):
+            return False
+        return True
 
-    def get_limit_up_list(self, date: str = None) -> pd.DataFrame:
-        """
-        获取涨停股票列表
+    def _save_capital(self, stock_code: str, capital_data: Dict):
+        """保存资金流向数据到数据库"""
+        with get_db_context() as db:
+            stock = db.query(Stock).filter(Stock.code == stock_code).first()
+            if not stock:
+                app_logger.warning(f"股票 {stock_code} 未找到，跳过资金流向", category="COLLECTOR")
+                return
 
-        Args:
-            date: 日期，格式 YYYYMMDD，None 表示今天
-        """
-        if date is None:
-            date = datetime.now().strftime("%Y%m%d")
+            stock_id = stock.id
 
-        logger.info(f"正在获取 {date} 涨停股票列表...")
-        try:
-            df = ak.stock_em_zt_pool(date=date)
-            logger.info(f"获取到 {len(df)} 只涨停股票")
-            return df
-        except Exception as e:
-            logger.error(f"获取涨停列表失败: {e}")
-            return pd.DataFrame()
-
-    def get_limit_down_list(self, date: str = None) -> pd.DataFrame:
-        """
-        获取跌停股票列表
-        """
-        if date is None:
-            date = datetime.now().strftime("%Y%m%d")
-
-        logger.info(f"正在获取 {date} 跌停股票列表...")
-        try:
-            df = ak.stock_em_zt_pool_subnormal(date=date, ignore_status=True)
-            logger.info(f"获取到 {len(df)} 只跌停股票")
-            return df
-        except Exception as e:
-            logger.error(f"获取跌停列表失败: {e}")
-            return pd.DataFrame()
-
-    def get_dragon_tiger(self, date: str = None) -> pd.DataFrame:
-        """
-        获取龙虎榜数据
-
-        Args:
-            date: 日期，格式 YYYYMMDD，None 表示最近一个交易日
-        """
-        logger.info(f"正在获取龙虎榜数据...")
-        try:
-            df = ak.stock_em_tiger_trade(date=date)
-            logger.info(f"获取到 {len(df)} 条龙虎榜数据")
-            return df
-        except Exception as e:
-            logger.error(f"获取龙虎榜失败: {e}")
-            return pd.DataFrame()
-
-    def format_money_flow_for_db(self, df: pd.DataFrame, symbol: str) -> list:
-        """
-        将资金流数据格式化为数据库写入格式
-        对应 fund.stock_money_flow 表
-        """
-        records = []
-        if df.empty:
-            return records
-
-        for _, row in df.iterrows():
-            try:
-                record = {
-                    "symbol": symbol,
-                    "trade_date": row.get("日期"),
-                    "main_inflow": float(row.get("主力净流入", 0) or 0),
-                    "main_outflow": float(row.get("主力净流出", 0) or 0),
-                    "super_large_in": float(row.get("超大单净流入", 0) or 0),
-                    "super_large_out": float(row.get("超大单净流出", 0) or 0),
-                    "large_in": float(row.get("大单净流入", 0) or 0),
-                    "large_out": float(row.get("大单净流出", 0) or 0),
-                    "medium_in": float(row.get("中单净流入", 0) or 0),
-                    "medium_out": float(row.get("中单净流出", 0) or 0),
-                    "small_in": float(row.get("小单净流入", 0) or 0),
-                    "small_out": float(row.get("小单净流出", 0) or 0),
-                }
-                records.append(record)
-            except Exception as e:
-                logger.warning(f"格式化资金流数据失败: {e}")
-                continue
-        return records
-
-    def format_north_money_for_db(self, df: pd.DataFrame) -> list:
-        """
-        将北向资金数据格式化为数据库写入格式
-        对应 fund.north_money 表
-        """
-        records = []
-        if df.empty:
-            return records
-
-        for _, row in df.iterrows():
-            try:
-                record = {
-                    "trade_date": row.get("日期"),
-                    "sh_connect": float(row.get("沪股通", 0) or 0),
-                    "sz_connect": float(row.get("深股通", 0) or 0),
-                    "total": float(row.get("北向资金", 0) or 0),
-                }
-                records.append(record)
-            except Exception as e:
-                logger.warning(f"格式化北向资金失败: {e}")
-                continue
-        return records
-
-
-if __name__ == "__main__":
-    collector = CapitalCollector()
-
-    # 测试获取个股资金流
-    print("=== 测试获取资金流 (贵州茅台 600519) ===")
-    df = collector.get_stock_money_flow("600519")
-    if not df.empty:
-        print(f"获取 {len(df)} 条数据")
-        print("列名:", df.columns.tolist())
-        print(df.tail())
-
-    # 测试北向资金
-    print("\n=== 测试获取北向资金 ===")
-    north_df = collector.get_north_money()
-    if not north_df.empty:
-        print(f"获取 {len(north_df)} 条数据")
-        print(north_df.tail())
-
-    # 测试涨停列表
-    print("\n=== 测试获取涨停列表 ===")
-    limit_df = collector.get_limit_up_list()
-    if not limit_df.empty:
-        print(f"获取 {len(limit_df)} 只涨停股票")
-        print(limit_df.head())
+            new_capital = StockCapital(
+                stock_id=stock_id,
+                trade_time=capital_data.get('trade_time', datetime.now()),
+                trade_date=capital_data.get('trade_time', datetime.now()),
+                main_inflow=capital_data.get('main_inflow', 0),
+                main_outflow=capital_data.get('main_outflow', 0),
+                super_large_inflow=capital_data.get('super_large_inflow', 0),
+                super_large_outflow=capital_data.get('super_large_outflow', 0),
+                large_inflow=capital_data.get('large_inflow', 0),
+                large_outflow=capital_data.get('large_outflow', 0),
+                medium_inflow=capital_data.get('medium_inflow', 0),
+                medium_outflow=capital_data.get('medium_outflow', 0),
+                small_inflow=capital_data.get('small_inflow', 0),
+                small_outflow=capital_data.get('small_outflow', 0),
+                net_inflow=capital_data.get('net_inflow', 0),
+            )
+            db.add(new_capital)
+            db.commit()

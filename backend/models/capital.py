@@ -87,6 +87,7 @@ class StockRealtime(Base):
 
     # 资金流数据
     main_inflow = Column(Numeric(20, 2))  # 主力净流入（元）
+    main_volume = Column(Numeric(20, 4))  # 主力净量
     weibi = Column(Numeric(10, 4))  # 委比(%)
     buy_price = Column(Numeric(10, 2))  # 买一价
     sell_price = Column(Numeric(10, 2))  # 卖一价

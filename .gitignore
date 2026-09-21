@@ -41,6 +41,9 @@ coverage/
 # Docker
 .docker/
 
+# Deploy
+deploy/images/
+
 # Temporary files
 tmp/
 temp/

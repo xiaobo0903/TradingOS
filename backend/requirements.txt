@@ -1,10 +1,35 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-pydantic==2.8.0
-pandas==2.2.0
-numpy==1.26.0
-aiofiles==24.1.0
-python-multipart==0.0.9
-akshare==1.14.15
-sqlalchemy==2.0.35
-psycopg2-binary==2.9.10
+# 国内镜像源
+-i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# FastAPI
+fastapi>=0.104.0
+uvicorn[standard]==0.24.0
+websockets>=10.4
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database
+sqlalchemy>=2.0.23
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Redis
+redis>=5.0.1
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Data Collection
+akshare>=1.12.0
+requests>=2.31.0
+tushare>=1.4.0
+
+# Scheduler
+apscheduler>=3.10.4
+schedule>=1.2.0
+
+# Utilities
+python-dotenv>=1.0.0
+python-multipart>=0.0.6

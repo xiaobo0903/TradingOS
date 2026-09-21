@@ -1,54 +1,24 @@
 version: '3.8'
 
 services:
-  # PostgreSQL + TimescaleDB
-  postgres:
-    image: timescale/timescaledb:latest-pg16
-    container_name: tradingos-postgres
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tradingos-backend
+    ports:
+      - "8001:8000"
     environment:
-      POSTGRES_USER: tradingos
-      POSTGRES_PASSWORD: tradingos_password
-      POSTGRES_DB: tradingos
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tradingos"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - DATABASE_URL=postgresql://postgres:postgres@192.168.31.132:5432/tradingos
+      - REDIS_URL=redis://192.168.31.132:6379/0
+      - DEBUG=false
+    restart: unless-stopped
 
-  # Redis
-  redis:
-    image: redis:7-alpine
-    container_name: tradingos-redis
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tradingos-frontend
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ChromaDB (向量数据库 - RAG知识库)
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: tradingos-chromadb
-    ports:
-      - "8800:8000"
-    volumes:
-      - chroma_data:/chroma/chroma/.chroma_internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
-  redis_data:
-  chroma_data:
+      - "8081:80"
+    restart: unless-stopped
