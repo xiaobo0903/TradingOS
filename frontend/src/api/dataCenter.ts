@@ -28,6 +28,11 @@ export interface StockRealtimeItem {
   float_market_cap: number
   pe: number | null
   pb: number | null
+  main_inflow: number
+  main_volume: number
+  weibi: number
+  buy_price: number
+  sell_price: number
 }
 
 export interface RealtimeListResponse {
