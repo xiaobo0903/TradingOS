@@ -116,9 +116,16 @@ function getChangeClass(pct: number | undefined | null): string {
 // 成交额格式化
 function formatAmount(value: number | undefined | null): string {
   if (!value) return '--'
-  if (value >= 1e8) return (value / 1e8).toFixed(2) + '亿'
-  if (value >= 1e4) return (value / 1e4).toFixed(2) + '万'
-  return value.toFixed(2)
+  const absValue = Math.abs(value)
+  let result = ''
+  if (absValue >= 1e8) {
+    result = (absValue / 1e8).toFixed(2) + '亿'
+  } else if (absValue >= 1e4) {
+    result = (absValue / 1e4).toFixed(2) + '万'
+  } else {
+    result = absValue.toFixed(2)
+  }
+  return value < 0 ? '-' + result : result
 }
 
 // 打开上传弹窗
